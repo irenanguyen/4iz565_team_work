@@ -6,4 +6,4 @@ The target variables are:
 
 Authors: Lohane da Cruz Evora and Irena Nguyen (NGUYEN THI HONG HAI)
 
-Please find the code and the intepretation/comments in the presentation.ipynb file. The files in individual works were solely used for better work-flow for the team.
+Note for review team: Please find the code and the intepretation/comments in the presentation.ipynb file. The files in individual works were solely used for better work-flow for the team.

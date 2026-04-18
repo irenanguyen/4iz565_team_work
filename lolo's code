@@ -3,6 +3,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 # Load the dataset
 data = pd.read_csv(r"C:\Users\lohan\Downloads\global_finance_data.csv")
@@ -33,6 +38,7 @@ cols_to_drop = [
     'Index_Value'
 ]
 
+#descriptive stats
 data.drop(columns=cols_to_drop, inplace=True)
 print(data.columns)
 print(data.info())
@@ -53,8 +59,18 @@ target_col = 'Daily_Change_Percent'
 if target_col not in numeric_data.columns:
     raise ValueError(f'{target_col} column is missing from numeric data.')
 
-# Standardize the predictor variables (exclude target)
-predictor_cols = [col for col in numeric_data.columns if col != target_col]
+# Standardize only the selected predictor variables
+predictor_cols = [
+    'GDP_Growth_Rate_Percent',
+    'Inflation_Rate_Percent',
+    'Interest_Rate_Percent',
+    'Unemployment_Rate_Percent',
+    'Exchange_Rate_USD'
+]
+for col in predictor_cols:
+    if col not in numeric_data.columns:
+        raise ValueError(f'Selected predictor column is missing: {col}')
+
 scaler = StandardScaler()
 scaled_predictors = scaler.fit_transform(numeric_data[predictor_cols])
 
@@ -76,51 +92,99 @@ print(f"\nRemoved {outlier_mask.sum()} outlier rows.")
 print(f"Original data shape: {standardized_data.shape}")
 print(f"Cleaned data shape: {standardized_data_clean.shape}")
 
-# Now use standardized_data_clean for further analysis
-x_cols = predictor_cols
-for x_col in x_cols:
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    
-    # Before cleaning
-    ax1.scatter(standardized_data[x_col], standardized_data[target_col], alpha=0.6)
-    ax1.set_xlabel(f'Standardized {x_col}')
-    ax1.set_ylabel(target_col)
-    ax1.set_title(f'Before Cleaning: {x_col} vs {target_col}')
-    ax1.grid(True, linestyle=':', linewidth=0.5)
-    
-    # After cleaning
-    ax2.scatter(standardized_data_clean[x_col], standardized_data_clean[target_col], alpha=0.6)
-    ax2.set_xlabel(f'Standardized {x_col}')
-    ax2.set_ylabel(target_col)
-    ax2.set_title(f'After Cleaning: {x_col} vs {target_col}')
-    ax2.grid(True, linestyle=':', linewidth=0.5)
-    
-    plt.tight_layout()
 
-plt.show()
 
-# Box plots to check for outliers in predictors
-fig, axes = plt.subplots(nrows=(len(predictor_cols) + 2) // 3, ncols=3, figsize=(15, 5 * ((len(predictor_cols) + 2) // 3)))
-axes = axes.flatten()
+# Multicollinearity test for linear regression predictors
+def calculate_vif(df, feature_list):
+    X = df[feature_list].dropna()
+    X['Intercept'] = 1
 
-for i, col in enumerate(predictor_cols):
-    axes[i].boxplot(standardized_data_clean[col])
-    axes[i].set_title(f'Box plot: {col}')
-    axes[i].set_ylabel('Standardized Value')
+    vif_data = pd.DataFrame()
+    vif_data['Feature'] = X.columns
+    vif_data['VIF'] = [
+        variance_inflation_factor(X.values, i)
+        for i in range(X.shape[1])
+    ]
 
-# Hide any unused subplots
-for j in range(len(predictor_cols), len(axes)):
-    axes[j].set_visible(False)
+    return vif_data[vif_data['Feature'] != 'Intercept']
 
-plt.tight_layout()
-plt.savefig('boxplots_predictors_clean.png')
-plt.close()
+features = [
+    'GDP_Growth_Rate_Percent',
+    'Interest_Rate_Percent',
+    'Unemployment_Rate_Percent',
+    'Exchange_Rate_USD', 
+]
 
-# Box plot for the target variable
-plt.figure(figsize=(7, 5))
-plt.boxplot(standardized_data_clean[target_col])
-plt.title(f'Box plot: {target_col}')
-plt.ylabel('Value')
-plt.grid(True, linestyle=':', linewidth=0.5)
-plt.savefig(f'boxplot_{target_col}_clean.png')
-plt.close()
+print("\nMulticollinearity results:")
+print(calculate_vif(numeric_data, features))
+
+# Correlation heatmap for the model variables (predictors + target)
+model_predictor_cols = [
+    'GDP_Growth_Rate_Percent',
+    'Interest_Rate_Percent',
+    'Unemployment_Rate_Percent',
+    'Exchange_Rate_USD',
+]
+corr_vars = standardized_data_clean[model_predictor_cols + [target_col]].corr()
+fig, ax = plt.subplots(figsize=(8, 6))
+cax = ax.matshow(corr_vars, cmap='coolwarm', vmin=-1, vmax=1)
+fig.colorbar(cax)
+
+ax.set_xticks(range(len(corr_vars.columns)))
+ax.set_yticks(range(len(corr_vars.index)))
+ax.set_xticklabels(corr_vars.columns, rotation=45, ha='left')
+ax.set_yticklabels(corr_vars.index)
+
+for (i, j), val in np.ndenumerate(corr_vars.values):
+    ax.text(j, i, f"{val:.2f}", ha='center', va='center', color='white' if abs(val) > 0.5 else 'black')
+
+ax.set_title('Correlation Heatmap: Model Variables')
+#plt.tight_layout()
+#plt.show()
+
+
+
+
+# OLS regression for cross-sectional data
+
+# Define model predictor columns
+model_predictor_cols = [
+    'GDP_Growth_Rate_Percent',
+    'Interest_Rate_Percent',
+    'Unemployment_Rate_Percent',
+    'Exchange_Rate_USD',
+]
+
+target_col = 'Daily_Change_Percent'
+
+X = standardized_data_clean[model_predictor_cols]
+y = standardized_data_clean[target_col]
+
+X = sm.add_constant(X)  # Add constant term for intercept
+
+model = sm.OLS(y, X).fit()
+
+print('\nOLS Regression Results:')
+print(f'Target: {target_col}')
+print(f'Predictors: {model_predictor_cols}')
+print(model.summary())
+
+
+#second OLS
+model_predictor_cols2 = [
+    'Interest_Rate_Percent',
+    'Unemployment_Rate_Percent',
+    'Exchange_Rate_USD',
+]
+
+X = standardized_data_clean[model_predictor_cols2]
+y = standardized_data_clean[target_col]
+
+X = sm.add_constant(X)  # Add constant term for intercept
+
+model = sm.OLS(y, X).fit()
+
+print('\nOLS Regression Results:')
+print(f'Target: {target_col}')
+print(f'Predictors: {model_predictor_cols2}')
+print(model.summary())

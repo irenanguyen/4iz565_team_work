@@ -1,0 +1,126 @@
+import kagglehub
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+
+# Load the dataset
+data = pd.read_csv(r"C:\Users\lohan\Downloads\global_finance_data.csv")
+print(data)
+
+#cant calculate log returns, use Daily_Change_Percent as Y instead
+
+print(data.info())
+print(data.head())
+print(data.describe())
+print(data.isnull().sum())
+
+
+cols_to_drop = [
+    'Current_Account_Balance_Billion_USD',
+    'Stock_Index',
+    'FDI_Inflow_Billion_USD',
+    'Commodity_Index',
+    'Credit_Rating',
+    'Banking_Sector_Health',
+    'Real_Estate_Index',
+    'Export_Growth_Percent',
+    'Import_Growth_Percent',
+    'Market_Cap_Trillion_USD',
+    'Currency_Code',
+    'Currency_Change_YTD_Percent',
+    'Government_Debt_GDP_Percent',
+    'Index_Value'
+]
+
+data.drop(columns=cols_to_drop, inplace=True)
+print(data.columns)
+print(data.info())
+print(data.head())
+print(data.describe())
+print(data.isnull().sum())
+
+# Print all rows
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+print("\nAll rows:")
+print(data)
+numeric_data = data.select_dtypes(include='number')
+print('Numeric variables for scatter plots:', numeric_data.columns.tolist())
+
+# Assuming 'Daily_Change_Percent' is the target variable
+target_col = 'Daily_Change_Percent'
+if target_col not in numeric_data.columns:
+    raise ValueError(f'{target_col} column is missing from numeric data.')
+
+# Standardize the predictor variables (exclude target)
+predictor_cols = [col for col in numeric_data.columns if col != target_col]
+scaler = StandardScaler()
+scaled_predictors = scaler.fit_transform(numeric_data[predictor_cols])
+
+# Create a DataFrame with scaled predictors
+scaled_predictors_df = pd.DataFrame(scaled_predictors, columns=predictor_cols, index=numeric_data.index)
+
+# Combine scaled predictors with the target
+standardized_data = pd.concat([scaled_predictors_df, numeric_data[target_col]], axis=1)
+
+print("\nStandardized data (predictors only):")
+print(standardized_data.head())
+print(standardized_data.describe())
+
+# Remove outliers: rows where any standardized predictor has absolute value >= 3
+outlier_mask = (standardized_data[predictor_cols].abs() >= 3).any(axis=1)
+standardized_data_clean = standardized_data[~outlier_mask]
+
+print(f"\nRemoved {outlier_mask.sum()} outlier rows.")
+print(f"Original data shape: {standardized_data.shape}")
+print(f"Cleaned data shape: {standardized_data_clean.shape}")
+
+# Now use standardized_data_clean for further analysis
+x_cols = predictor_cols
+for x_col in x_cols:
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    
+    # Before cleaning
+    ax1.scatter(standardized_data[x_col], standardized_data[target_col], alpha=0.6)
+    ax1.set_xlabel(f'Standardized {x_col}')
+    ax1.set_ylabel(target_col)
+    ax1.set_title(f'Before Cleaning: {x_col} vs {target_col}')
+    ax1.grid(True, linestyle=':', linewidth=0.5)
+    
+    # After cleaning
+    ax2.scatter(standardized_data_clean[x_col], standardized_data_clean[target_col], alpha=0.6)
+    ax2.set_xlabel(f'Standardized {x_col}')
+    ax2.set_ylabel(target_col)
+    ax2.set_title(f'After Cleaning: {x_col} vs {target_col}')
+    ax2.grid(True, linestyle=':', linewidth=0.5)
+    
+    plt.tight_layout()
+
+plt.show()
+
+# Box plots to check for outliers in predictors
+fig, axes = plt.subplots(nrows=(len(predictor_cols) + 2) // 3, ncols=3, figsize=(15, 5 * ((len(predictor_cols) + 2) // 3)))
+axes = axes.flatten()
+
+for i, col in enumerate(predictor_cols):
+    axes[i].boxplot(standardized_data_clean[col])
+    axes[i].set_title(f'Box plot: {col}')
+    axes[i].set_ylabel('Standardized Value')
+
+# Hide any unused subplots
+for j in range(len(predictor_cols), len(axes)):
+    axes[j].set_visible(False)
+
+plt.tight_layout()
+plt.savefig('boxplots_predictors_clean.png')
+plt.close()
+
+# Box plot for the target variable
+plt.figure(figsize=(7, 5))
+plt.boxplot(standardized_data_clean[target_col])
+plt.title(f'Box plot: {target_col}')
+plt.ylabel('Value')
+plt.grid(True, linestyle=':', linewidth=0.5)
+plt.savefig(f'boxplot_{target_col}_clean.png')
+plt.close()

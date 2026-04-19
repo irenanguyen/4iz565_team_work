@@ -7,3 +7,9 @@ The target variables are:
 Authors: Lohane da Cruz Evora and Irena Nguyen (NGUYEN THI HONG HAI)
 
 Note for review team: Please find the code and the intepretation/comments in the presentation.ipynb file. The files in individual works were solely used for better work-flow for the team. An HTML file was added for easier access to the project.
+
+GUIDE (In case you are not familiar with github)
+- click to the `presentation.html`  in the list of files
+- Click the download file symbol in the tool bar, the html file will be automatically downloaded into your device
+- Click on the downloaded file, it should be opened in your browser.
+- Please contact me via email `ngut107@vse.cz` if there is any technical problem, I would be happy to assist.
